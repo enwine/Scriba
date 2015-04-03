@@ -2,12 +2,16 @@
 
 namespace ScribaService
 {
-    class Program
+    internal class Program
     {
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
             // Default port stands for SCRIBA (omitting first number to fit in size)
-            int port = 27422;
+            var port = 27422;
+
+            Console.WriteLine(
+                "Scriba server. Version 0.1.\nLicensed under: http://creativecommons.org/licenses/by-nc-sa/4.0/\nVicenç Gascó (vicenc@idako.us)\n");
+
             if (args.Length > 0)
             {
                 int.TryParse(args[0], out port);
@@ -18,7 +22,7 @@ namespace ScribaService
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine("Scriba server could not start.\nError: " + ex.ToString());
+                Console.Error.WriteLine("Scriba server could not start.\nError: " + ex);
             }
         }
     }

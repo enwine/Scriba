@@ -1,46 +1,42 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading.Tasks;
+
 namespace ScribaService
 {
-    class Engine
+    internal class Engine
     {
-        TcpClient client;
-        public Engine (TcpClient _client)
+        private readonly TcpClient _client;
+
+        public Engine(TcpClient client)
         {
-            client = _client;
-            client.ReceiveBufferSize = 2048;
+            _client = client;
+            _client.ReceiveBufferSize = 2048;
         }
 
         public void EngineLoop()
         {
-            byte[] input = new byte[2048];
-            byte[] output = null;
-            bool closeConnection = false;
-            NetworkStream stream = null;
+            var input = new byte[2048];
+            var closeConnection = false;
 
-            string command, response;
-            
             while (true)
             {
                 try
                 {
-                    if (closeConnection || !client.Connected)
+                    var stream = _client.GetStream();
+
+                    if (closeConnection || !_client.Connected)
                     {
                         stream.Close();
                         ShutdownEngine();
                         break;
                     }
 
-                    stream = client.GetStream();
-                    stream.Read(input, 0, (int)client.ReceiveBufferSize);
+                    stream.Read(input, 0, _client.ReceiveBufferSize);
 
-                    command = System.Text.Encoding.UTF8.GetString(input);
-                    response = ReadCommand(command, out closeConnection);
-                    output = Encoding.UTF8.GetBytes(response);
+                    var command = Encoding.UTF8.GetString(input);
+                    var response = ReadCommand(command, out closeConnection);
+                    var output = Encoding.UTF8.GetBytes(response);
 
                     stream.Write(output, 0, output.Length);
                     stream.Flush();
@@ -53,22 +49,24 @@ namespace ScribaService
                 }
             }
         }
+
         public string ReadCommand(string commandString, out bool closeConnection)
         {
             closeConnection = false;
             try
             {
-                string command = commandString.Substring(0, commandString.IndexOf(" ")).ToUpperInvariant(),
-                token = commandString.Substring(commandString.IndexOf(" ") + 1, 32),
-                payload = commandString.Substring(commandString.IndexOf(" ") + 34);
+                string command =
+                    commandString.Substring(0, commandString.IndexOf(" ", StringComparison.Ordinal)).ToUpperInvariant(),
+                    token = commandString.Substring(commandString.IndexOf(" ", StringComparison.Ordinal) + 1, 32),
+                    payload = commandString.Substring(commandString.IndexOf(" ", StringComparison.Ordinal) + 34);
                 switch (command)
                 {
                     case "GET":
-                        return "GET Reads a unique event by APP_TOKEN + EVENT_ID.";
+                        return Get(token, payload);
                     case "PUT":
-                        return PUT(token, payload);
+                        return Put(token, payload);
                     case "ALL":
-                        return "ALL Gets all events by APP_TOKEN, and a filter object. Sorts by descending date, and serves up to 1,000 events (within 1.96 MBytes).";
+                        return All(token, payload);
                     case "BYE":
                         closeConnection = true;
                         return "BYE";
@@ -76,24 +74,46 @@ namespace ScribaService
                         return command + " is an unknown command.";
                 }
             }
-            catch (Exception ex)
+            catch
             {
                 return "Scriba could not understand your message.";
             }
-            
         }
 
-
-        private string PUT(string token, string payload)
+        private string Get(string token, string payload)
         {
-            EventRow row = EventRow.FromJson(payload);
+            var row = EventRow.FromJson(payload);
             row.ApplicationId = token;
             Server.Gate.PushEventRow(row);
             return "OK";
         }
+
+        private string Put(string token, string payload)
+        {
+            var row = EventRow.FromJson(payload);
+            row.ApplicationId = token;
+            Server.Gate.PushEventRow(row);
+            return "OK";
+        }
+
+        /// <summary>
+        ///     ALL Gets all events by APP_TOKEN, and a filter object. Sorts by descending date, and serves up to 1,000 events
+        ///     (within 1.96 MBytes).
+        /// </summary>
+        /// <param name="token"></param>
+        /// <param name="payload"></param>
+        /// <returns></returns>
+        private string All(string token, string payload)
+        {
+            var row = EventRow.FromJson(payload);
+            row.ApplicationId = token;
+            Server.Gate.PushEventRow(row);
+            return "OK";
+        }
+
         private void ShutdownEngine()
         {
-            client.Close();
+            _client.Close();
         }
     }
 }

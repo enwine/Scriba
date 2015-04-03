@@ -5,43 +5,42 @@ using System.Threading;
 
 namespace ScribaService
 {
-    class Server
+    internal class Server
     {
-        ConcurrentQueue<EventRow> setEventsQueue;
-        TcpListener server;
+        // ReSharper disable once InconsistentNaming
         private static readonly Lazy<Server> _instance = new Lazy<Server>(() => new Server());
+        private readonly ConcurrentQueue<EventRow> _setEventsQueue;
+        private TcpListener _server;
+
         private Server()
         {
-            setEventsQueue = new ConcurrentQueue<EventRow>();
+            _setEventsQueue = new ConcurrentQueue<EventRow>();
         }
+
         public static Server Gate
         {
-            get
-            {
-                return _instance.Value;
-            }
+            get { return _instance.Value; }
         }
 
-
         /// <summary>
-        /// Makes the server listen to a given port.
+        ///     Makes the server listen to a given port.
         /// </summary>
         /// <param name="port">Port number to listen, by default: 27422.</param>
         public void OpenPort(int port = 27422)
         {
             // ToDo
             // Needs to be reviewd as this constructor is dreprecated.
-            server = new TcpListener(port);
-            server.Start();
+            _server = new TcpListener(port);
+            _server.Start();
             ProcessQueue();
-            
-            TcpClient client = default(TcpClient);
+
+            Console.WriteLine("\nScriba server is now running...\n");
 
             while (true)
             {
                 try
                 {
-                    client = server.AcceptTcpClient();
+                    var client = _server.AcceptTcpClient();
                     ForkClient(client);
                 }
                 catch (Exception ex)
@@ -49,44 +48,47 @@ namespace ScribaService
                     Console.WriteLine(ex.ToString());
                 }
             }
-
+            // ReSharper disable once FunctionNeverReturns
         }
+
         /// <summary>
-        /// Pushes an element to the end of the processing FIFO queue.
+        ///     Pushes an element to the end of the processing FIFO queue.
         /// </summary>
         /// <param name="ev">Item to push.</param>
         public void PushEventRow(EventRow ev)
         {
-            setEventsQueue.Enqueue(ev);
+            _setEventsQueue.Enqueue(ev);
         }
+
         /// <summary>
-        /// Pops the oldest element, following a FIFO structure.
+        ///     Pops the oldest element, following a FIFO structure.
         /// </summary>
         /// <remarks>Before returning the object, it is processed and saved to disk.</remarks>
         /// <returns>An EventRow object, null if there's no more objects.</returns>
         public EventRow PopEventRow()
         {
-            EventRow row = null;
-            if (setEventsQueue.TryDequeue(out row))
+            EventRow row;
+            if (_setEventsQueue.TryDequeue(out row))
             {
                 // insert to disk
             }
             return row;
         }
 
-
         private void ForkClient(TcpClient client)
         {
-            Engine engine = new Engine(client);
-            Thread thread = new Thread(engine.EngineLoop);
+            var engine = new Engine(client);
+            var thread = new Thread(engine.EngineLoop);
             thread.Start();
         }
+
         private void ProcessQueue(object obj = null)
         {
-            while (!setEventsQueue.IsEmpty)
+            while (!_setEventsQueue.IsEmpty)
             {
                 PopEventRow();
             }
+            // ReSharper disable once ObjectCreationAsStatement
             new Timer(ProcessQueue, null, 200, Timeout.Infinite);
         }
     }
